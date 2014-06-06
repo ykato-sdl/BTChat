@@ -1,0 +1,18 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="com.example.btchat.MainActivity" >
+
+    <item
+        android:id="@+id/action_clear"
+        android:title="@string/action_clear"/>
+    <item
+        android:id="@+id/action_start_server"
+        android:title="@string/action_start_server"/>
+    <item
+        android:id="@+id/action_connect"
+        android:title="@string/action_connect"/>
+    <item
+        android:id="@+id/action_disconnect"
+        android:title="@string/action_disconnect"/>
+
+</menu>
