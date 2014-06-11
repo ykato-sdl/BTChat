@@ -10,8 +10,10 @@ import java.util.UUID;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -21,12 +23,14 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.WindowManager.LayoutParams;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 public class MainActivity extends Activity implements BTCommHandler.Listener {
     private final static String TAG = "MainActivity";
@@ -53,6 +57,7 @@ public class MainActivity extends Activity implements BTCommHandler.Listener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate");
+        this.getWindow().setSoftInputMode(LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         setContentView(R.layout.activity_main);
 
         if (savedInstanceState != null)
@@ -62,7 +67,21 @@ public class MainActivity extends Activity implements BTCommHandler.Listener {
 
         setupUI();
         disableInput();
-        setupBT();
+
+        BluetoothManager btManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        btAdapter = btManager.getAdapter();
+        if (btAdapter == null) {
+            Toast.makeText(this, R.string.error_bluetooth_not_supported, Toast.LENGTH_SHORT).show();
+            finish();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!btAdapter.isEnabled())
+            startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+                    REQUEST_ENABLE_BT);
     }
 
     @Override
@@ -112,6 +131,28 @@ public class MainActivity extends Activity implements BTCommHandler.Listener {
         }
         return super.onOptionsItemSelected(item);
     }
+    
+    public void onActivityResult(int reqCode, int resCode, Intent data) {
+        Log.i(TAG, "onActivityResult");
+        switch (reqCode) {
+        case REQUEST_ENABLE_BT:
+            if (resCode == Activity.RESULT_CANCELED) {
+                Toast.makeText(this, R.string.error_bluetooth_must_be_enabled, Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+            break;
+        case REQUEST_SELECT_DEVICE:
+            if (resCode == Activity.RESULT_OK) {
+                BluetoothDevice device = (BluetoothDevice) data
+                        .getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                Log.i(TAG, "device=" + device);
+                connect(device);
+            }
+            break;
+        }
+        super.onActivityResult(reqCode, resCode, data);
+    }
 
     private void setupUI() {
         connectionStatusView = (TextView) findViewById(R.id.connection_status);
@@ -145,38 +186,6 @@ public class MainActivity extends Activity implements BTCommHandler.Listener {
         sendButton.setEnabled(false);
     }
 
-    private void setupBT() {
-        btAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (btAdapter == null)
-            FatalErrorDialogFragment.show(this, R.string.no_bt_alert_message);
-        else if (!btAdapter.isEnabled())
-            startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
-                    REQUEST_ENABLE_BT);
-        else
-            setupBT1();
-    }
-
-    private void setupBT1() {}
-
-    public void onActivityResult(int reqCode, int resCode, Intent data) {
-        Log.i(TAG, "onActivityResult");
-        switch (reqCode) {
-        case REQUEST_ENABLE_BT:
-            if (resCode == Activity.RESULT_OK)
-                setupBT1();
-            else if (resCode == Activity.RESULT_CANCELED)
-                FatalErrorDialogFragment.show(this, R.string.bt_needed_alert_message);
-            break;
-        case REQUEST_SELECT_DEVICE:
-            if (resCode == Activity.RESULT_OK) {
-                BluetoothDevice device = (BluetoothDevice) data
-                        .getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                Log.i(TAG, "device=" + device);
-                connect(device);
-            }
-            break;
-        }
-    }
 
     // Handling Connection
 

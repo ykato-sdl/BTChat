@@ -6,6 +6,7 @@ import java.util.Set;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -21,6 +22,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.TextView;
 
@@ -53,7 +55,56 @@ public class BTSelectionActivity extends Activity implements BTDevDialogFragment
             devList = new ArrayList<BluetoothDevice>();
 
         setupUI();
-        setupBT();
+        BluetoothManager btManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        btAdapter = btManager.getAdapter();
+        if (btAdapter == null) {
+            Toast.makeText(this, R.string.error_bluetooth_not_supported, Toast.LENGTH_SHORT).show();
+            finish();
+        }
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.i(TAG, "onResume");
+        if (!btAdapter.isEnabled())
+            startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+                    REQUEST_ENABLE_BT);
+        else
+            setupBT();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        Log.i(TAG, "onDestroy");
+        if (btAdapter != null)
+            btAdapter.cancelDiscovery();
+        if (btSearchReceiver != null)
+            unregisterReceiver(btSearchReceiver);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        Log.i(TAG, "onSaveInstanceState");
+        outState.putParcelableArrayList(DEVLIST_KEY, devList);
+    }
+
+    public void onActivityResult(int reqCode, int resCode, Intent data) {
+        Log.i(TAG, "onActivityResult");
+        switch (reqCode) {
+        case REQUEST_ENABLE_BT:
+            if (resCode == Activity.RESULT_OK)
+                setupBT();
+            else if (resCode == Activity.RESULT_CANCELED) {
+                Toast.makeText(this, R.string.error_bluetooth_must_be_enabled, Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+            break;
+        }
+        super.onActivityResult(reqCode, resCode, data);
     }
 
     private void setupUI() {
@@ -104,29 +155,9 @@ public class BTSelectionActivity extends Activity implements BTDevDialogFragment
     }
 
     private void setupBT() {
-        btAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (btAdapter == null)
-            FatalErrorDialogFragment.show(this, R.string.bt_needed_alert_message);
-        else if (!btAdapter.isEnabled())
-            startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
-                    REQUEST_ENABLE_BT);
-        else
-            setupBTReceiver();
-    }
+        Set<BluetoothDevice> devs = btAdapter.getBondedDevices();
+        devListAdapter.addAll(devs);
 
-    public void onActivityResult(int reqCode, int resCode, Intent data) {
-        Log.i(TAG, "onActivityResult");
-        switch (reqCode) {
-        case REQUEST_ENABLE_BT:
-            if (resCode == Activity.RESULT_OK)
-                setupBTReceiver();
-            else if (resCode == Activity.RESULT_CANCELED)
-                FatalErrorDialogFragment.show(this, R.string.bt_needed_alert_message);
-            break;
-        }
-    }
-
-    private void setupBTReceiver() {
         btSearchReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -165,30 +196,5 @@ public class BTSelectionActivity extends Activity implements BTDevDialogFragment
         data.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         setResult(Activity.RESULT_OK, data);
         finish();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        Log.i(TAG, "onResume");
-        Set<BluetoothDevice> devs = btAdapter.getBondedDevices();
-        devListAdapter.addAll(devs);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        Log.i(TAG, "onDestroy");
-        if (btAdapter != null)
-            btAdapter.cancelDiscovery();
-        if (btSearchReceiver != null)
-            unregisterReceiver(btSearchReceiver);
-    }
-
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        Log.i(TAG, "onSaveInstanceState");
-        outState.putParcelableArrayList(DEVLIST_KEY, devList);
     }
 }
